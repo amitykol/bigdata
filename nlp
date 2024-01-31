@@ -14,7 +14,7 @@ while num>0:
     for i in words:
         if i in ['good','nice','amazing','wow','superb']:
             p += 1
-        if i in ['bad','worst',useless','damaged','terrible']:
+        if i in ['bad','worst','useless','damaged','terrible']:
             n +=1
         if i in ['ok','so so','okayish','alright']:
            neu+=1
