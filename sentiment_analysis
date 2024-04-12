@@ -158,7 +158,7 @@ def compare_products(product_x, product_y, product_z):
 # Example usage:
 compare_products(product_scores.iloc[0, 0], product_scores.iloc[3, 0], product_scores.iloc[4, 0])
 #applying sentiment analysis on new data
-test = data.iloc[20000: , :]
+test = data.iloc[200: , :]
 
 # Apply preprocessing to each review
 test['reviews.text'] = test['reviews.text'].apply(clean_text)
