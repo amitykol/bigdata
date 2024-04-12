@@ -29,6 +29,11 @@ review_data['reviews.text'] = review_data['reviews.text'].str.replace('[^\w\s]',
 review_data['reviews.text'] = review_data['reviews.text'] .str.replace('\d', '')
 
 review_data.head()
+!pip install nltk
+import nltk
+nltk.download('punkt')
+import nltk
+nltk.download('stopwords')
 
 from nltk.corpus import stopwords
 
