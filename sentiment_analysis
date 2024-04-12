@@ -1,0 +1,164 @@
+import numpy as np
+import pandas as pd
+
+import warnings
+warnings.filterwarnings('ignore')
+
+data=pd.read_csv("review.csv",low_memory=False)
+data.head()
+data.drop(['id', 'asins', 'brand', 'categories', 'keys', 'manufacturer',
+       'reviews.date', 'reviews.dateAdded', 'reviews.dateSeen',
+       'reviews.didPurchase', 'reviews.doRecommend', 'reviews.id',
+       'reviews.numHelpful', 'reviews.rating', 'reviews.sourceURLs',
+       'reviews.title', 'reviews.userCity',
+       'reviews.userProvince', 'reviews.username'],axis=1,inplace=True)
+
+data.dropna(inplace=True)
+data.shape
+review_data=data.head(20000)
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.stem import PorterStemmer
+# to put all the characters in a standard
+review_data['reviews.text'] =review_data['reviews.text'].str.lower()  # make all lowercase
+
+# check sentences and replace punctions with spaces
+review_data['reviews.text'] = review_data['reviews.text'].str.replace('[^\w\s]', '')
+
+# check for numbers and replace with spaces
+review_data['reviews.text'] = review_data['reviews.text'] .str.replace('\d', '')
+
+review_data.head()
+
+from nltk.corpus import stopwords
+
+# Initialize Porter Stemmer
+stemmer = PorterStemmer()
+
+# Function to preprocess text
+def clean_text(text):
+    # Remove stopwords and tokenization
+    tokens = word_tokenize(text)
+    stop_words = set(stopwords.words('english'))
+    exclude_stopwords = {'not', 'wasn', "wasn't", "no", 'ain', 'aren', "aren't", 'couldn', "couldn't", 'didn', "didn't", 'doesn', "doesn't", 'hadn', "hadn't", 'hasn', "hasn't", 'haven', "haven't", 'isn', "isn't", 'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan', "shan't", 'shouldn', "shouldn't", 'wasn', "wasn't", 'weren', "weren't", 'won', "won't", 'wouldn', "wouldn't", 'not'}
+    tokens = [token for token in tokens if token not in stop_words or (token in exclude_stopwords)]
+    
+    # Stemming
+    stemmed_tokens = [stemmer.stem(token) for token in tokens]
+    
+    # Join tokens back into a string
+    clean_text = ' '.join(stemmed_tokens)
+    
+    return clean_text
+
+# Apply preprocessing to each review
+review_data['reviews.text'] = review_data['reviews.text'].apply(clean_text)
+review_data
+
+# Define word categories
+catalyst_words = ["very"]
+positive_words = [ "amazing", "love", "awesome", "great", "excellent", "wonderful","fantastic", "superb", "good",
+    "perfect","impressive","outstanding","brilliant","terrific","splendid","delightful","satisfying","fabulous","exceptional","top-notch",
+    "marvelous","phenomenal", "remarkable","stellar","high-quality","best","quality","beautiful","nice","pleas","gorgeous",
+    "fine","pleasant","charming","appealing","positive","sensational","awesome","joyful","thrilling","exciting","uplifting","inspiring",
+    "heartwarming","refreshing","delicious","fun","satisfactory","rewarding","beneficial","effective","efficient","helpful","valuable",
+    "worthwhile","praiseworthy","commendable","commendable","applaudable","admirable","worthy","noteworthy","impeccable",
+    "flawless","spotless","clean","neat","tidy","organized","smooth","easy","convenient","user-friendly","accessible","simple","straightforward",
+    "excellent",]
+negative_words = ['not', 'wasn', "wasn't", "no", 'ain', 'aren', "aren't", 'couldn', "couldn't", 'didn', "didn't", 'doesn', "doesn't", 
+                  'hadn', "hadn't", 'hasn', "hasn't", 'haven', "haven't", 'isn', "isn't", 'ma', 'mightn', "mightn't", 'mustn', 
+                  "mustn't", 'needn', "needn't", 'shan', "shan't", 'shouldn', "shouldn't", 'wasn', "wasn't", 'weren', "weren't", 
+                  'won', "won't", 'wouldn', "wouldn't", 'not']
+inverse_words = ["contrary", "transposed", "antithetical", "antithesis", "neither", "nor"]
+
+catalyst_words = [stemmer.stem(word) for word in catalyst_words]
+positive_words = [stemmer.stem(word) for word in positive_words]
+inverse_words = [stemmer.stem(word) for word in inverse_words]
+negative_words = [stemmer.stem(word) for word in negative_words]
+
+# Function to calculate sentiment score of a review
+def calculate_sw(sentence):
+    Cp = sum(sentence.count(word) for word in positive_words)
+    Cn = sum(sentence.count(word) for word in negative_words)
+    Ci = sum(sentence.count(word) for word in inverse_words)
+    Cc = sum(sentence.count(word) for word in catalyst_words)
+
+    # Applying conditions to calculate Sw
+    if Cp > 0:
+        if Cc > 0:
+            Cp = 2 * Cp
+    elif Cn > 0:
+        if Cc > 0:
+            Cn = -2 * Cn
+    elif Ci > 0:
+        Ci = -Ci
+    
+    Sw = Cp - Cn + Ci
+    return Sw
+
+# Calculate sentiment score for each review
+review_data['sentiment_score'] = review_data['reviews.text'].apply(lambda x: calculate_sw(x))
+
+review_data
+
+
+#Finding review score of each product
+# Group by product name and calculate the maximum, minimum, and mean sentiment scores
+product_scores = review_data.groupby('name')['sentiment_score'].agg(['max', 'min', 'mean']).reset_index()
+
+# Function to calculate review score for each row individually
+def calculate_review_score(row):
+    max_score = row['max']
+    min_score = row['min']
+    mean_score = row['mean']
+    
+    # Avoid division by zero if all sentiment scores are the same
+    if max_score == min_score:
+        return max_score
+    else:
+        return round((((mean_score - min_score) / (max_score - min_score)) * 20)-10)
+
+# Apply the function to calculate review score for each row
+product_scores['review_score'] = product_scores.apply(calculate_review_score, axis=1)
+
+product_scores['review_score'] = product_scores['review_score'].apply(lambda x: round(x))
+product_scores
+
+# Save the review scores to a new CSV file
+product_scores.to_csv('Review Scores.csv', index=False)
+
+#comparing products, products compared are of review_data dataframe
+def compare_products(product_x, product_y, product_z):    
+    # Get the review scores for the given products
+    scores = product_scores.set_index('name')['review_score']
+   
+    # Check if the given product names are in the product_scores DataFrame
+    if product_x not in scores or product_y not in scores or product_z not in scores:
+        print("One or more products not found in the product scores dataset.")
+        return
+    
+    # Get the review scores for the given products
+    score_x, score_y, score_z = scores.loc[[product_x, product_y, product_z]]
+    
+    # Compare the review scores
+    if score_x > score_y and score_x > score_z:
+        print(f"{product_x} is best among the others because it has the highest review score.")
+    elif score_y > score_x and score_y > score_z:
+        print(f"{product_y} is best among the others because it has the highest review score.")
+    elif score_z > score_x and score_z > score_y:
+        print(f"{product_z} is best among the others because it has the highest review score.")
+    else:
+        print("All products have the same review score.")
+
+# Example usage:
+compare_products(product_scores.iloc[0, 0], product_scores.iloc[3, 0], product_scores.iloc[4, 0])
+#applying sentiment analysis on new data
+test = data.iloc[20000: , :]
+
+# Apply preprocessing to each review
+test['reviews.text'] = test['reviews.text'].apply(clean_text)
+
+# Calculate sentiment score for each review
+test['sentiment_score'] = test['reviews.text'].apply(lambda x: calculate_sw(x))
+
+test
